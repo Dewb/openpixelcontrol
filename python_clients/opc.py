@@ -67,6 +67,8 @@ class Client(object):
         self._port = int(self._port)
 
         self._socket = None  # will be None when we're not connected
+        self.message = bytearray()
+
 
     def _debug(self, m):
         if self.verbose:
@@ -143,21 +145,27 @@ class Client(object):
             self._debug('put_pixels: not connected.  ignoring these pixels.')
             return False
 
+        if (len(self.message) != len(pixels) * 3 + 4):
+            self.message = bytearray(len(pixels) * 3 + 4)
+
         # build OPC message
         len_hi_byte = int(len(pixels)*3 / 256)
         len_lo_byte = (len(pixels)*3) % 256
         header = chr(channel) + chr(0) + chr(len_hi_byte) + chr(len_lo_byte)
-        pieces = [header]
-        for r, g, b in pixels:
-            r = min(255, max(0, int(r)))
-            g = min(255, max(0, int(g)))
-            b = min(255, max(0, int(b)))
-            pieces.append(chr(r) + chr(g) + chr(b))
-        message = ''.join(pieces)
+        for index, b in enumerate(header):
+            self.message[index] = b
+
+        for index, (r, g, b) in enumerate(pixels):
+            r = int(r)
+            g = int(g)
+            b = int(b)
+            self.message[4 + index * 3 + 0] = 255 if r > 255 else (0 if r < 0 else r)
+            self.message[4 + index * 3 + 1] = 255 if g > 255 else (0 if g < 0 else g)
+            self.message[4 + index * 3 + 2] = 255 if b > 255 else (0 if b < 0 else b)
 
         self._debug('put_pixels: sending pixels to server')
         try:
-            self._socket.send(message)
+            self._socket.send(self.message)
         except socket.error:
             self._debug('put_pixels: connection lost.  could not send pixels.')
             self._socket = None
