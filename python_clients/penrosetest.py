@@ -186,6 +186,9 @@ def distance(x1, y1, x2, y2):
     return math.sqrt(v[0] * v[0] + v[1] * v[1])
     #return v[0] * v[0] + v[1] * v[1]
 
+def lerp(a, b, t):
+    return a + t * (b - a)
+
 def plasma(t, accum, x, y):
     phase = accum
     stretch = 0.008 + (math.sin(t/20 * TF) ** 3 + 1.0) * 3.6
@@ -200,21 +203,29 @@ def plasma(t, accum, x, y):
 TF = 1 # /30
 
 def region_color(t, coord, ii, n_pixels, random_value, accum):
+
+    p = plasma(t, accum, coord[0], coord[1])
+    d = abs(p - 0.5)
+
+    s = lerp(0.6, 1.0, p)
+    l = lerp(0.2, 0.5, p)
+    
+    smix = lerp(1.0, 0.7, d)
+    lmix = lerp(0.5, 0.2, d)
+
     c = {
-        'A': (0, 1.0, 0.5),
-        'AB': (20, 1.0, 0.5),
-        'B': (40, 1.0, 0.5),
-        'BC': (60, 1.0, 0.5),
-        'C': (80, 1.0, 0.5),
-        'AC': (100, 1.0, 0.5),
+        'A': (0, s, l),
+        'AB': (lerp(0, 40, p), smix, lmix),
+        'B': (40, s, l),
+        'BC': (lerp(40, 80, p), smix, lmix),
+        'C': (80, s, l),
+        'AC': (lerp(80, 100, p), smix, lmix),
         'off': (0, 0, 0),
     }.get(regions[ii], (0, 0.3, 0.6))
 
-    p = plasma(t, accum, coord[0], coord[1])
-
     return HSLColor((c[0] + t * 3 * TF) % 360, 
-                    c[1] * (0.6 + 0.4 * p),
-                    c[2] * (0.4 + 0.6 * p)
+                    c[1],
+                    c[2]
                     ).convert_to('rgb').get_value_tuple()
 
 
@@ -264,7 +275,7 @@ accum = 0
 while True:
     t = time.time() - start_time
     pixels = [region_color(t*0.6, coord, ii, n_pixels, random_values, accum) for ii, coord in enumerate(coordinates)]
-    accum = accum + 0.0001 * ( 1.0 + 80.0 * math.pow(math.sin(t/10 * TF), 3.0))
+    accum = accum + 0.001 * ( 1.0 + 80.0 * math.pow(math.sin(t/10 * TF), 2))
     client.put_pixels(pixels, channel=0)
     time.sleep(1 / options.fps)
 
