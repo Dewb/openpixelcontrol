@@ -46,9 +46,13 @@ int show_axes = 1;
 #define SHAPE_THICKNESS 0.06  // thickness of points and lines, metres
 
 // LED colours
+#define MAX_CHANNELS 16
 #define MAX_PIXELS 30000
 int num_pixels = 0;
-pixel pixels[MAX_PIXELS];
+pixel pixels[MAX_CHANNELS][MAX_PIXELS];
+
+int numDestinations = 0;
+char destinationAddresses[MAX_CHANNELS][40];
 
 // Floating-point colours
 typedef struct {
@@ -124,6 +128,7 @@ void updateBBox(vector v) {
 typedef struct shape {
   void (*draw)(struct shape* this, GLUquadric* quad);
   int index;
+  u8 channel;
   union {
     vector point;
     struct { vector start, end; } line;
@@ -137,7 +142,7 @@ int num_shapes = 0;
 shape shapes[MAX_SHAPES];
 
 void draw_point(shape* this, GLUquadric* quad) {
-  pixel p = pixels[this->index];
+  pixel p = pixels[this->channel][this->index];
   glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
   glPushMatrix();
   glTranslatef(this->g.point.x, this->g.point.y, this->g.point.z);
@@ -147,7 +152,7 @@ void draw_point(shape* this, GLUquadric* quad) {
 }
 
 void draw_line(shape* this, GLUquadric* quad) {
-  pixel p = pixels[this->index];
+  pixel p = pixels[this->channel][this->index];
   vector start = this->g.line.start;
   vector delta = subtract(this->g.line.end, this->g.line.start);
   vector z = {0, 0, 1};
@@ -166,7 +171,7 @@ void draw_line(shape* this, GLUquadric* quad) {
 }
 
 void draw_quad(shape* this, GLUquadric* quad) {
-  pixel p = pixels[this->index];
+  pixel p = pixels[this->channel][this->index];
   glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
   glPushMatrix();
   glBegin(GL_QUADS);
@@ -295,7 +300,7 @@ void handler(u8 channel, u16 count, pixel* p) {
   }
 
   for (i = 0; i < count; i++) {
-    pixels[i] = p[i];
+    pixels[channel][i] = p[i];
   }
 }
 
@@ -341,6 +346,7 @@ void init(char* filename) {
   cJSON* json;
   cJSON* item;
   cJSON* index;
+  cJSON* address;
   cJSON* point;
   cJSON* x;
   cJSON* line;
@@ -361,6 +367,27 @@ void init(char* filename) {
     index = cJSON_GetObjectItem(item, "index");
     if (index) {
       i = index->valueint;
+    }
+    address = cJSON_GetObjectItem(item, "address");
+    if (address) {
+      int chan = -1;
+      for (int dd = 0; dd < numDestinations; dd++) {
+        if (strncmp(destinationAddresses[dd], address->valuestring, 40) == 0) {
+          chan = dd;
+          break;
+        }
+      }
+      if (chan < 0) {
+        if (numDestinations >= MAX_CHANNELS) {
+          fprintf(stderr, "Too many destinations, not enough channels");
+          exit(1);
+        }
+        strncpy(destinationAddresses[numDestinations], address->valuestring, 40); 
+        chan = numDestinations;
+        printf("mapping server address %s to channel %d\n", address->valuestring, chan);
+        numDestinations++;
+      }
+      shapes[num_shapes].channel = chan;
     }
     point = cJSON_GetObjectItem(item, "point");
     x = point ? point->child : NULL;
@@ -422,9 +449,9 @@ void init(char* filename) {
     }
   }
   num_pixels = i;
-  for (i = 0; i < num_pixels; i++) {
-    pixels[i].r = pixels[i].g = pixels[i].b = 1;
-  }
+  //for (i = 0; i < num_pixels; i++) {
+  //  pixels[i].r = pixels[i].g = pixels[i].b = 1;
+  //}
   for (i = 0; i < 256; i++) {
     xfer[i].r = xfer[i].g = xfer[i].b = 0.1 + i*0.9/256;
   }
