@@ -5,7 +5,7 @@ ifeq ($(platform),Darwin)
   GL_OPTS=-framework OpenGL -framework GLUT -Wno-deprecated-declarations
 else ifeq ($(platform),Linux)
   ALL=bin/dummy_client bin/dummy_server bin/tcl_server bin/ws2801_server bin/lpd8806_server bin/gl_server
-  GL_OPTS=-lGL -lglut -lGLU -lm
+  GL_OPTS=-lGL -lglut -lGLU -lm --std=gnu99
 endif
 
 all: $(ALL)
